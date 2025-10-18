@@ -1,79 +1,79 @@
 ﻿using System;
+using System.Linq;
 using Microsoft.EntityFrameworkCore;
-using TrilhaApiDesafio.Context;
 using TrilhaApiDesafio.Controllers;
+using TrilhaApiDesafio.Context;
 using TrilhaApiDesafio.Models;
-using Xunit;
 using Microsoft.AspNetCore.Mvc;
-using System.Collections;
+using Xunit;
 
 namespace TrilhaApiDesafio.Tests
 {
-    public class TarefaControllerTests
+    public class TarefaControllerTests : IDisposable
     {
-        private OrganizadorContext CriarContextoEmMemoria(string dbName)
+        private readonly OrganizadorContext _context;
+        private readonly TarefaController _controller;
+
+        public TarefaControllerTests()
         {
             var options = new DbContextOptionsBuilder<OrganizadorContext>()
-                .UseInMemoryDatabase(dbName)
-                using System;
-                using Microsoft.EntityFrameworkCore;
-                using TrilhaApiDesafio.Context;
-                using TrilhaApiDesafio.Controllers;
-                using TrilhaApiDesafio.Models;
-                using Xunit;
-                using Microsoft.AspNetCore.Mvc;
-                using System.Collections;
+                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+                .Options;
 
-                namespace TrilhaApiDesafio.Tests
-                {
-                    public class TarefaControllerTests
-                    {
-                        private OrganizadorContext CriarContextoEmMemoria(string dbName)
-                        {
-                            var options = new DbContextOptionsBuilder<OrganizadorContext>()
-                                .UseInMemoryDatabase(dbName)
-                                .Options;
+            _context = new OrganizadorContext(options);
+            _context.Database.EnsureCreated();
 
-                            var context = new OrganizadorContext(options);
-                            return context;
-                        }
+            _controller = new TarefaController(_context);
+        }
 
-                        [Fact]
-                        public void Criar_Obter_Atualizar_Deletar_Tarefa()
-                        {
-                            var contexto = CriarContextoEmMemoria("TesteDB");
-                            var controller = new TarefaController(contexto);
+        [Fact]
+        public void Crud_Tarefa_Workflow()
+        {
+            var nova = new Tarefa
+            {
+                Titulo = "Teste",
+                Descricao = "Desc",
+                Data = DateTime.Now,
+                Status = EnumStatusTarefa.Pendente
+            };
 
-                            var nova = new Tarefa
-                            {
-                                Titulo = "Teste",
-                                Descricao = "Desc",
-                                Data = DateTime.Now,
-                                Status = EnumStatusTarefa.Pendente
-                            };
+            var criarResult = _controller.Criar(nova) as CreatedAtActionResult;
+            Assert.NotNull(criarResult);
+            var created = criarResult.Value as Tarefa;
+            Assert.NotNull(created);
+            Assert.Equal("Teste", created.Titulo);
 
-                            var criarResult = controller.Criar(nova) as CreatedAtActionResult;
-                            Assert.NotNull(criarResult);
+            var todosResult = _controller.ObterTodos() as OkObjectResult;
+            Assert.NotNull(todosResult);
+            var lista = todosResult.Value as System.Collections.IEnumerable;
+            Assert.NotNull(lista);
 
-                            var tarefasTodos = (controller.ObterTodos() as OkObjectResult)?.Value as IEnumerable;
-                            Assert.NotNull(tarefasTodos);
+            var obterResult = _controller.ObterPorId(created.Id) as OkObjectResult;
+            Assert.NotNull(obterResult);
+            var obter = obterResult.Value as Tarefa;
+            Assert.NotNull(obter);
 
-                            var obterIdResult = controller.ObterPorId(nova.Id) as OkObjectResult;
-                            Assert.NotNull(obterIdResult);
+            created.Titulo = "NovoTitulo";
+            var atualizar = _controller.Atualizar(created.Id, created) as OkObjectResult;
+            Assert.NotNull(atualizar);
+            var atualizado = atualizar.Value as Tarefa;
+            Assert.NotNull(atualizado);
+            Assert.Equal("NovoTitulo", atualizado.Titulo);
 
-                            var tarefaObtida = obterIdResult.Value as Tarefa;
-                            Assert.Equal("Teste", tarefaObtida.Titulo);
+            var del = _controller.Deletar(atualizado.Id) as NoContentResult;
+            Assert.NotNull(del);
 
-                            // Atualizar
-                            tarefaObtida.Titulo = "NovoTitulo";
-                            var atualizar = controller.Atualizar(tarefaObtida.Id, tarefaObtida) as OkObjectResult;
-                            Assert.NotNull(atualizar);
-                            var atualizado = atualizar.Value as Tarefa;
-                            Assert.Equal("NovoTitulo", atualizado.Titulo);
+            var todosAfter = _controller.ObterTodos() as OkObjectResult;
+            Assert.NotNull(todosAfter);
+            var listaAfter = todosAfter.Value as System.Collections.IEnumerable;
+            Assert.NotNull(listaAfter);
+        }
 
-                            // Deletar
-                            var del = controller.Deletar(atualizado.Id) as StatusCodeResult;
-                            Assert.Equal(204, del.StatusCode);
-                        }
-                    }
-                }
+        public void Dispose()
+        {
+            _context.Database.EnsureDeleted();
+            _context.Dispose();
+        }
+    }
+}
+
